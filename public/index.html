@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to Firebase Hosting</title>
+
+    <style media="screen">
+      body {
+        display: flex;
+        min-height: 100vh;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+      }
+
+      #uploader {
+        -webkit-appearance: none;
+        width: 50%;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <progress value="0" max="100" id="uploader">0%</progress>
+    <input type="file" value="upload" id="fileButton" accept=".mp3, .mpeg, .wav, .ogg, audio/mpeg, audio/wav, audio/ogg">
+    <br><br>
+    <div id="player">
+      <select id="selectSongs"></select>
+      <button id="playButton" disabled=true>play</button>
+    </div>
+    
+    <script src="https://www.gstatic.com/firebasejs/4.2.0/firebase.js"></script>
+    <script src="config.js"></script>
+    <script>
+      // Initialize Firebase
+      firebase.initializeApp(config);
+
+      // Get elements
+      var uploader = document.getElementById('uploader');
+      var fileButton = document.getElementById('fileButton');
+      var selectSongs = document.getElementById('selectSongs');
+      var playButton = document.getElementById('playButton');
+      
+      // Audio
+      var audio = new Audio();
+
+      // Listen for file selection
+      fileButton.addEventListener('change', function(e){
+        // Get file
+        var file = e.target.files[0];
+        // Create a storage ref
+        var storageRef = firebase.storage().ref('music/' + file.name);
+        // Upload file
+        var task = storageRef.put(file);
+        // Update progress bar
+        task.on('state_changed', 
+          function progress(snapshot){
+            var percentage = snapshot.bytesTransferred / snapshot.totalBytes * 100;
+            uploader.value = percentage;
+          },
+          function error(err){
+            //console.log(err);
+          },
+          function complete(){
+
+          }
+        );
+      });
+
+      // Get music list from database
+      firebase.database().ref('musicList').on('child_added', data => {
+        selectSongs.options.add(new Option(data.key, data.key + '.' + data.val().fileType));
+        playButton.disabled = false;
+      });
+      firebase.database().ref('musicList').on('child_changed', data => {
+        for(i = selectSongs.options.length-1; i >= 0; i--){
+          if(selectSongs.options[i].text === data.key){
+            selectSongs.options[i].value = data.key + '.' + data.val().fileType;
+          }
+        }
+      });
+      firebase.database().ref('musicList').on('child_removed', data => {
+        for(i = selectSongs.options.length-1; i >= 0; i--){
+          if(selectSongs.options[i].text === data.key){
+            selectSongs.options[i].remove();
+          }
+        }
+        if(selectSongs.options.length < 0){
+          playButton.disabled = true;
+        }
+      });
+
+      // Play song
+      playButton.addEventListener('click', () => {
+        var fileName = selectSongs.value;
+        // Get file url
+        if(fileName){
+          firebase.storage().ref('music/' + fileName).getDownloadURL().then(url => {
+            audio.src = url;
+            audio.play();
+          });
+        }
+      });
+    </script>
+  </body>
+</html>
